@@ -20,8 +20,10 @@ body {
   display: grid;
   place-items: center;
   background: var(--paper);
-  background-image: radial-gradient(#00000010 1px, transparent 1px);
-  background-size: 4px 4px;
+  background-image: radial-gradient(#00000010 1px, transparent 1px), url("bg.png");
+  background-size: 4px 4px, cover;
+  background-position: 0 0, center;
+  background-repeat: repeat, no-repeat;
   color: var(--ink);
   font-family: "Patrick Hand", ui-rounded, system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
@@ -109,6 +111,13 @@ body[data-wear="dead"] .cond i { background: var(--bad); }
   font: inherit;
   font-size: 15px;
   cursor: pointer;
+}
+
+.hbtn img {
+  display: block;
+  width: 19px;
+  height: 19px;
+  object-fit: contain;
 }
 
 .hbtn:active {
@@ -255,6 +264,43 @@ body[data-wear="dead"] .cond i { background: var(--bad); }
   text-align: center;
   font-size: 13px;
   color: var(--bad);
+}
+
+.crash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #1d1a16;
+  color: #f4efe3;
+  text-align: center;
+}
+
+.crash-screen[hidden] {
+  display: none;
+}
+
+.crash-note {
+  width: min(100%, 360px);
+}
+
+.crash-note h1 {
+  margin: 0 0 8px;
+  font-family: Caveat, cursive;
+  font-size: clamp(36px, 10vw, 58px);
+  font-weight: 700;
+}
+
+.crash-note p {
+  margin: 0 0 18px;
+  color: #f4efe3bb;
+  font-size: 16px;
+}
+
+.crash-note .wide {
+  background: #fffdf7;
 }
 
 .overlay {
@@ -545,6 +591,13 @@ body[data-wear="dead"] .cond i { background: var(--bad); }
 .toast.on {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  body,
+  body * {
+    cursor: url("cursor.png") 0 0, auto !important;
+  }
 }
 
 @media (max-width: 360px) {

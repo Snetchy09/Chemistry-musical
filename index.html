@@ -13,8 +13,8 @@
     <div class=wallet><span class=pip></span><b id=pts>0</b></div>
     <div class=cond><i id=condFill></i><span id=condNum>100%</span></div>
     <nav class=hud-menu>
-      <button class=hbtn id=openTasks type=button aria-label=tasks>&#9678;</button>
-      <button class=hbtn id=openShop type=button aria-label=shop>&#9671;</button>
+      <button class=hbtn id=openTasks type=button aria-label=tasks><img src="tsks.png" alt=""></button>
+      <button class=hbtn id=openShop type=button aria-label=shop><img src="shop.png" alt=""></button>
       <button class=hbtn id=openInk type=button aria-label=ink>&#9998;</button>
     </nav>
   </header>
@@ -27,6 +27,13 @@
     <div class=keys id=keypad></div>
   </main>
   <p class=dead-note id=deadNote hidden>out of order &mdash; tune it up in the shop</p>
+</div>
+<div class="crash-screen" id=crashScreen hidden>
+  <div class=crash-note>
+    <h1>calculator crashed</h1>
+    <p>the paper ran out of life. refresh the page to start it again.</p>
+    <button class=wide id=refreshCrash type=button>refresh page</button>
+  </div>
 </div>
 <div class=overlay id=tasksOv hidden>
   <div class=panel>
@@ -161,9 +168,12 @@
     return s;
   }
   var S = load();
+  var crashedBeforeRefresh = S.cond <= 0;
+  if (crashedBeforeRefresh) S.cond = 100;
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
   }
+  if (crashedBeforeRefresh) save();
   function $(id) { return document.getElementById(id); }
   function h(tag, cls, text) {
     var n = document.createElement(tag);
@@ -239,6 +249,7 @@
     document.body.dataset.wear = c <= 0 ? 'dead' : c < 25 ? 'dying' : c < 55 ? 'bad' : c < 85 ? 'worn' : 'fine';
     $('machine').classList.toggle('is-dead', c <= 0);
     $('deadNote').hidden = c > 0;
+    $('crashScreen').hidden = c > 0;
   }
   function use(n, floor) {
     S.cond = Math.max(floor || 0, Math.min(100, S.cond - n));
@@ -408,7 +419,7 @@
 
   var seq = 0;
   function level() {
-    return Math.min(4, Math.floor((S.solved + Math.floor(S.unlocked.length / 4)) / 3));
+    return Math.min(6, Math.floor((S.solved + Math.floor(S.unlocked.length / 4)) / 3));
   }
   function shuffle(list) {
     for (var i = list.length - 1; i > 0; i--) {
@@ -425,7 +436,8 @@
     var opPool = shuffle(ops.slice());
     var digits = shuffle('0123456789'.split(''));
     var out = [];
-    var budget = Math.min(fit, 4 + Math.floor(Math.random() * Math.max(1, Math.min(3, fit - 3))));
+    var lv = level();
+    var budget = Math.min(fit, 4 + lv + Math.floor(Math.random() * 2));
     while (out.length < budget && digits.length) {
       if (!out.length || isOp(out[out.length - 1])) {
         var take = budget - out.length >= 2 && digits.length >= 2 && Math.random() < 0.5 ? 2 : 1;
@@ -455,7 +467,7 @@
     var lv = level();
     var id = 'q' + (seq += 1) + '-' + Date.now().toString(36);
     var wantClose = lv >= 1 && Math.random() < 0.45;
-    var tol = [3, 2, 1.5, 1, 0.5][lv];
+    var tol = [3, 2, 1.5, 1, 0.65, 0.4, 0.25][lv];
     var task = null;
     for (var tries = 0; tries < 60 && !task; tries++) {
       var d = draft();
@@ -858,6 +870,7 @@
   $('openShop').addEventListener('click', function () { renderShop(); $('shopOv').hidden = false; });
   $('openInk').addEventListener('click', function () { renderInk(); $('inkOv').hidden = false; });
   $('reroll').addEventListener('click', reroll);
+  $('refreshCrash').addEventListener('click', function () { location.reload(); });
   document.querySelectorAll('[data-close]').forEach(function (btn) {
     btn.addEventListener('click', function () { btn.closest('.overlay').hidden = true; });
   });
