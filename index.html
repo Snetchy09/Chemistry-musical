@@ -1,0 +1,947 @@
+<!doctype html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>paper calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Patrick+Hand&display=swap" rel=stylesheet>
+<link rel=stylesheet href=styles.css>
+</head>
+<body>
+<div class=app>
+  <header class=hud>
+    <div class=wallet><span class=pip></span><b id=pts>0</b></div>
+    <div class=cond><i id=condFill></i><span id=condNum>100%</span></div>
+    <nav class=hud-menu>
+      <button class=hbtn id=openTasks type=button aria-label=tasks>&#9678;</button>
+      <button class=hbtn id=openShop type=button aria-label=shop>&#9671;</button>
+      <button class=hbtn id=openInk type=button aria-label=ink>&#9998;</button>
+    </nav>
+  </header>
+  <main class=machine id=machine>
+    <div class=screen>
+      <p class=taskline id=taskline>no task</p>
+      <div class=cells id=cells></div>
+      <p class=readout id=readout>&mdash;</p>
+    </div>
+    <div class=keys id=keypad></div>
+  </main>
+  <p class=dead-note id=deadNote hidden>out of order &mdash; tune it up in the shop</p>
+</div>
+<div class=overlay id=tasksOv hidden>
+  <div class=panel>
+    <header class=panel-head>
+      <h2>tasks</h2>
+      <button class=x type=button data-close aria-label=close>&times;</button>
+    </header>
+    <div class=panel-body id=taskList></div>
+    <footer class=panel-foot>
+      <button class=wide id=reroll type=button>reroll &middot; 25 pts</button>
+    </footer>
+  </div>
+</div>
+<div class=overlay id=shopOv hidden>
+  <div class=panel>
+    <header class=panel-head>
+      <h2>shop</h2>
+      <span class=purse id=shopPurse>0 pts</span>
+      <button class=x type=button data-close aria-label=close>&times;</button>
+    </header>
+    <div class=panel-body id=shopList></div>
+  </div>
+</div>
+<div class=overlay id=pickOv hidden>
+  <div class=panel>
+    <header class=panel-head>
+      <h2>double use</h2>
+      <button class=x type=button data-close aria-label=close>&times;</button>
+    </header>
+    <div class=panel-body>
+      <p class=note>pick one token that may be used twice in the same equation.</p>
+      <div class=ink-grid id=pickList></div>
+    </div>
+  </div>
+</div>
+<div class=overlay id=inkOv hidden>
+  <div class=panel>
+    <header class=panel-head>
+      <h2>ink</h2>
+      <button class=x type=button data-close aria-label=close>&times;</button>
+    </header>
+    <div class=panel-body>
+      <p class=note>tap a token to draw it again. anything you skip stays printed.</p>
+      <div class=ink-grid id=inkGrid></div>
+      <div class=ink-actions>
+        <button class="wide" id=inkAll type=button>redraw everything</button>
+        <button class="wide danger" id=wipe type=button>wipe progress</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class=overlay id=drawOv hidden>
+  <div class="panel draw-panel">
+    <header class=panel-head>
+      <h2 id=drawTitle>draw</h2>
+      <span class=purse id=drawCount></span>
+    </header>
+    <div class=board>
+      <span class=ghost id=drawGhost></span>
+      <canvas id=inkPad></canvas>
+    </div>
+    <div class=tools>
+      <button class=tool id=tBack type=button><span>&lsaquo;</span><small>back</small></button>
+      <button class=tool id=tRetry type=button><span>&#8635;</span><small>again</small></button>
+      <button class=tool id=tPrinted type=button><span>&#9633;</span><small>printed</small></button>
+      <button class=tool id=tSkip type=button><span>&rsaquo;</span><small>skip</small></button>
+      <button class=tool id=tSkipAll type=button><span>&raquo;</span><small>rest</small></button>
+      <button class="tool go" id=tSave type=button><span>&#10003;</span><small>save</small></button>
+    </div>
+  </div>
+</div>
+<div class=toast id=toast></div>
+<script>
+(function () {
+  'use strict';
+  var KEY = 'paper-calc.c1';
+  var CELL0 = 5, CELL_MAX = 12, REROLL = 25, DOUBLE = 700;
+  var T = {
+    '0': { g: '0', s: '0' }, '1': { g: '1', s: '1' }, '2': { g: '2', s: '2' },
+    '3': { g: '3', s: '3' }, '4': { g: '4', s: '4' }, '5': { g: '5', s: '5' },
+    '6': { g: '6', s: '6' }, '7': { g: '7', s: '7' }, '8': { g: '8', s: '8' },
+    '9': { g: '9', s: '9' }, '.': { g: '.', s: '.' },
+    '+': { g: '+', s: '+' }, '-': { g: '\u2212', s: '-' },
+    '*': { g: '\u00d7', s: '*' }, '/': { g: '\u00f7', s: '/' },
+    '(': { g: '(', s: '(', name: 'brackets' }, ')': { g: ')', s: ')' },
+    '^': { g: '^', s: '**', name: 'power' },
+    sqrt: { g: '\u221a', s: 'Math.sqrt(', name: 'root' },
+    pi: { g: '\u03c0', s: 'Math.PI', name: 'pi' },
+    e: { g: 'e', s: 'Math.E', name: 'e' },
+    abs: { g: 'abs', s: 'Math.abs(', name: 'abs' },
+    sin: { g: 'sin', s: 'Math.sin(', name: 'sin' },
+    cos: { g: 'cos', s: 'Math.cos(', name: 'cos' },
+    tan: { g: 'tan', s: 'Math.tan(', name: 'tan' },
+    log: { g: 'log', s: 'Math.log(', name: 'log' }
+  };
+  var BASE = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '+', '-', '*', '/'];
+  var EXTRA = ['(', ')', '^', 'sqrt', 'pi', 'e', 'abs', 'sin', 'cos', 'tan', 'log'];
+  var SHOP = [
+    { id: 'cells', name: 'a cell', icon: '\u25a6' },
+    { id: 'fix', name: 'tune up', icon: '\u271a' },
+    { id: 'double', name: 'double use', icon: '\u00d72', desc: 'one token may appear twice' },
+    { id: 'paren', name: 'brackets', icon: '( )', tokens: ['(', ')'], price: 340, desc: '( and ) together' },
+    { id: '^', name: 'power', icon: '^', price: 460, desc: '2^8 makes 256' },
+    { id: 'sqrt', name: 'root', icon: '\u221a', price: 560, desc: '\u221a85 gives 9.22' },
+    { id: 'abs', name: 'abs', icon: 'abs', price: 520, desc: 'strips the minus' },
+    { id: 'pi', name: 'pi', icon: '\u03c0', price: 500, desc: '3.14159\u2026' },
+    { id: 'e', name: 'e', icon: 'e', price: 500, desc: '2.71828\u2026' },
+    { id: 'sin', name: 'sin', icon: 'sin', desc: 'radians, not degrees', gate: 'solved', n: 5 },
+    { id: 'cos', name: 'cos', icon: 'cos', desc: 'radians, not degrees', gate: 'exact', n: 3 },
+    { id: 'tan', name: 'tan', icon: 'tan', desc: 'runs away near \u03c0/2', gate: 'close', n: 3 },
+    { id: 'log', name: 'log', icon: 'log', desc: 'natural log', gate: 'earned', n: 1400 }
+  ];
+
+  function blank() {
+    return {
+      seen: false, ink: {}, pts: 0, cells: 0, unlocked: [], doubled: {}, cond: 100,
+      solved: 0, exact: 0, close: 0, earned: 0, tasks: [], active: null, recent: []
+    };
+  }
+  function load() {
+    var raw = null, s = blank(), k;
+    try { raw = JSON.parse(localStorage.getItem(KEY)); } catch (e) { raw = null; }
+    if (raw && typeof raw === 'object') for (k in s) if (k in raw) s[k] = raw[k];
+    s.ink = s.ink && typeof s.ink === 'object' ? s.ink : {};
+    s.doubled = s.doubled && typeof s.doubled === 'object' ? s.doubled : {};
+    s.unlocked = Array.isArray(s.unlocked) ? s.unlocked : [];
+    s.tasks = Array.isArray(s.tasks) ? s.tasks : [];
+    s.recent = Array.isArray(s.recent) ? s.recent : [];
+    ['pts', 'cells', 'cond', 'solved', 'exact', 'close', 'earned'].forEach(function (n) {
+      if (typeof s[n] !== 'number' || !isFinite(s[n])) s[n] = blank()[n];
+    });
+    return s;
+  }
+  var S = load();
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  }
+  function $(id) { return document.getElementById(id); }
+  function h(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function cells() { return Math.min(CELL_MAX, CELL0 + S.cells); }
+  function dead() { return S.cond <= 0; }
+  function has(id) { return S.unlocked.indexOf(id) > -1; }
+  function owned() { return BASE.concat(EXTRA.filter(has)); }
+  function isOp(id) { return id.length === 1 && '+-*/^'.indexOf(id) > -1; }
+  function room() { return owned().filter(function (id) { return !S.doubled[id]; }); }
+  function used(id) {
+    var n = 0;
+    for (var i = 0; i < X.length; i++) if (X[i] === id) n += 1;
+    return n;
+  }
+  function limit(id) { return S.doubled[id] ? 2 : 1; }
+  function spent(id) { return used(id) >= limit(id); }
+  function fmt(n) {
+    if (!isFinite(n)) return '?';
+    var tidy = Math.round(n * 1e10) / 1e10;
+    if (tidy !== 0 && (Math.abs(tidy) >= 1e12 || Math.abs(tidy) < 1e-7)) return n.toExponential(5);
+    return String(tidy);
+  }
+  function nameOf(id) { return T[id].name || T[id].g; }
+  var X = [];
+
+  var cache = {};
+  function inkURL(id) {
+    if (cache[id] !== undefined) return cache[id];
+    var strokes = S.ink[id];
+    if (!strokes || !strokes.length) { cache[id] = null; return null; }
+    var size = 128;
+    var cv = document.createElement('canvas');
+    cv.width = cv.height = size;
+    var c = cv.getContext('2d');
+    c.strokeStyle = c.fillStyle = '#1d1a16';
+    c.lineWidth = 7;
+    c.lineCap = c.lineJoin = 'round';
+    strokes.forEach(function (s) {
+      if (s.length < 4) {
+        if (!s.length) return;
+        c.beginPath();
+        c.arc(8 + s[0] * (size - 16), 8 + s[1] * (size - 16), 3, 0, Math.PI * 2);
+        c.fill();
+        return;
+      }
+      c.beginPath();
+      for (var i = 0; i < s.length; i += 2) {
+        var x = 8 + s[i] * (size - 16), y = 8 + s[i + 1] * (size - 16);
+        if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+      }
+      c.stroke();
+    });
+    cache[id] = cv.toDataURL('image/png');
+    return cache[id];
+  }
+  function face(id, cls) {
+    var n = h('span', 'face' + (cls ? ' ' + cls : ''));
+    var url = inkURL(id);
+    if (url) n.style.backgroundImage = 'url(' + url + ')';
+    else { n.classList.add('printed'); n.textContent = T[id].g; }
+    return n;
+  }
+  function forget(id) { delete cache[id]; }
+
+  function updateCond() {
+    var c = Math.max(0, Math.min(100, S.cond));
+    $('condFill').style.width = c + '%';
+    $('condNum').textContent = Math.round(c) + '%';
+    document.body.dataset.wear = c <= 0 ? 'dead' : c < 25 ? 'dying' : c < 55 ? 'bad' : c < 85 ? 'worn' : 'fine';
+    $('machine').classList.toggle('is-dead', c <= 0);
+    $('deadNote').hidden = c > 0;
+  }
+  function use(n, floor) {
+    S.cond = Math.max(floor || 0, Math.min(100, S.cond - n));
+    updateCond();
+    save();
+  }
+
+  var toastTimer = null;
+  function toast(text) {
+    var t = $('toast');
+    t.textContent = text;
+    t.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('on'); }, 1900);
+  }
+  function buzz(ms) {
+    if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} }
+  }
+
+  function syncTop() {
+    $('pts').textContent = S.pts;
+    $('shopPurse').textContent = S.pts + ' pts';
+    updateCond();
+  }
+  function renderCells() {
+    var box = $('cells'), n = cells();
+    box.innerHTML = '';
+    box.style.gridTemplateColumns = 'repeat(' + Math.min(n, 6) + ',minmax(0,1fr))';
+    for (var i = 0; i < n; i++) {
+      var c = h('div', 'cell');
+      if (X[i]) { c.classList.add('full'); c.appendChild(face(X[i], 'sm')); }
+      else if (i === X.length) c.classList.add('caret');
+      box.appendChild(c);
+    }
+  }
+  function paintKeys() {
+    var ks = $('keypad').querySelectorAll('.key[data-tok]');
+    for (var i = 0; i < ks.length; i++) ks[i].classList.toggle('spent', spent(ks[i].dataset.tok));
+  }
+  function redraw() { renderCells(); paintKeys(); }
+  function renderKeys() {
+    var pad = $('keypad');
+    pad.innerHTML = '';
+    owned().forEach(function (id) {
+      var b = h('button', 'key');
+      b.type = 'button';
+      b.dataset.tok = id;
+      b.setAttribute('aria-label', nameOf(id) + (S.doubled[id] ? ' x2' : ''));
+      b.appendChild(face(id, 'keyface'));
+      if (S.doubled[id]) b.appendChild(h('i', 'twin', '2'));
+      b.addEventListener('click', function () { push(id); });
+      pad.appendChild(b);
+    });
+    var del = h('button', 'key del', '\u232b');
+    del.type = 'button';
+    del.setAttribute('aria-label', 'delete');
+    del.addEventListener('click', back);
+    holdClear(del);
+    pad.appendChild(del);
+    var eq = h('button', 'key eq', '=');
+    eq.type = 'button';
+    eq.setAttribute('aria-label', 'equals');
+    eq.addEventListener('click', equals);
+    pad.appendChild(eq);
+    paintKeys();
+  }
+  function renderTaskline() {
+    var t = S.active;
+    $('taskline').textContent = t ? describe(t) + ' \u00b7 up to ' + t.base + ' pts' : 'no task \u2014 open \u25ce';
+    $('taskline').classList.toggle('live', !!t);
+  }
+  function shake(node) {
+    node.classList.remove('shake');
+    void node.offsetWidth;
+    node.classList.add('shake');
+  }
+  function thud() {
+    shake($('machine'));
+    toast('it is dead. tune it up.');
+    buzz(40);
+  }
+
+  function push(id) {
+    if (dead()) return thud();
+    if (spent(id)) { toast('one use per token \u2014 clear it first'); buzz(20); return; }
+    if (X.length >= cells()) { shake($('machine')); toast('no room \u2014 buy cells'); return; }
+    X.push(id);
+    use(0.06, 8);
+    if (S.cond < 30 && Math.random() < (30 - S.cond) / 30 * 0.25) {
+      X.pop();
+      redraw();
+      toast('the key stuck');
+      buzz(25);
+      return;
+    }
+    redraw();
+    buzz(8);
+  }
+  function back() {
+    if (dead()) return thud();
+    if (!X.length) return;
+    X.pop();
+    redraw();
+    buzz(8);
+  }
+  function holdClear(btn) {
+    var timer = null;
+    var clear = function () { timer = null; X = []; $('readout').textContent = '\u2014'; redraw(); buzz(12); };
+    btn.addEventListener('pointerdown', function () { timer = setTimeout(clear, 520); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (type) {
+      btn.addEventListener(type, function () { if (timer) { clearTimeout(timer); timer = null; } });
+    });
+  }
+
+  function isDigit(id) { return id.length === 1 && id >= '0' && id <= '9'; }
+  function isFn(id) { return id === 'sqrt' || id === 'abs' || id === 'sin' || id === 'cos' || id === 'tan' || id === 'log'; }
+  function endsValue(id) { return isDigit(id) || id === ')' || id === 'pi' || id === 'e'; }
+  function startsValue(id) { return isDigit(id) || id === '(' || id === 'pi' || id === 'e' || isFn(id); }
+  function toSource() {
+    var src = '';
+    for (var i = 0; i < X.length; i++) {
+      var id = X[i], prev = X[i - 1];
+      if (prev && endsValue(prev) && startsValue(id)) {
+        var glued = isDigit(prev) && (isDigit(id) || id === '.');
+        if (!glued) src += '*';
+      }
+      src += T[id].s;
+    }
+    var open = 0;
+    for (var j = 0; j < src.length; j++) {
+      if (src[j] === '(') open += 1;
+      else if (src[j] === ')') open -= 1;
+    }
+    while (open > 0) { src += ')'; open -= 1; }
+    return src;
+  }
+  function evaluate(toks) {
+    var saved = X;
+    X = toks;
+    var src = toSource();
+    X = saved;
+    if (/[^0-9+\-*/().a-zA-Z]/.test(src)) return NaN;
+    try {
+      var v = new Function('"use strict";return (' + src + ')')();
+      return typeof v === 'number' ? v : NaN;
+    } catch (e) { return NaN; }
+  }
+  function equals() {
+    if (dead()) return thud();
+    if (!X.length) return shake($('machine'));
+    var src = toSource(), v;
+    if (/[^0-9+\-*/().a-zA-Z]/.test(src)) return shake($('machine'));
+    try { v = new Function('"use strict";return (' + src + ')')(); }
+    catch (e) { toast('that does not read'); return shake($('machine')); }
+    if (typeof v !== 'number' || !isFinite(v)) {
+      use(18, 0);
+      $('readout').textContent = 'err';
+      shake($('machine'));
+      toast('short circuit \u221218%');
+      return;
+    }
+    use(1.5, 8);
+    $('readout').textContent = fmt(v);
+    buzz(15);
+    score(v);
+  }
+
+  var seq = 0;
+  function level() {
+    return Math.min(4, Math.floor((S.solved + Math.floor(S.unlocked.length / 4)) / 3));
+  }
+  function shuffle(list) {
+    for (var i = list.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var held = list[i]; list[i] = list[j]; list[j] = held;
+    }
+    return list;
+  }
+  function buildSum() {
+    var fit = cells();
+    if (fit < 3) return null;
+    var ops = ['+', '-', '*', '/'];
+    if (has('^')) ops.push('^');
+    var opPool = shuffle(ops.slice());
+    var digits = shuffle('0123456789'.split(''));
+    var out = [];
+    var budget = Math.min(fit, 4 + Math.floor(Math.random() * Math.max(1, Math.min(3, fit - 3))));
+    while (out.length < budget && digits.length) {
+      if (!out.length || isOp(out[out.length - 1])) {
+        var take = budget - out.length >= 2 && digits.length >= 2 && Math.random() < 0.5 ? 2 : 1;
+        for (var d = 0; d < take && digits.length; d++) out.push(digits.pop());
+      } else {
+        if (!opPool.length) break;
+        out.push(opPool.pop());
+      }
+    }
+    while (out.length && isOp(out[out.length - 1])) out.pop();
+    if (out.length < 3) return null;
+    var joins = 0;
+    for (var i = 0; i < out.length; i++) if (isOp(out[i])) joins += 1;
+    if (!joins) return null;
+    var value = evaluate(out);
+    if (!isFinite(value)) return null;
+    return { toks: out, value: value };
+  }
+  function draft() {
+    for (var tries = 0; tries < 10; tries++) {
+      var sum = buildSum();
+      if (sum) return sum;
+    }
+    return null;
+  }
+  function makeTask(batch) {
+    var lv = level();
+    var id = 'q' + (seq += 1) + '-' + Date.now().toString(36);
+    var wantClose = lv >= 1 && Math.random() < 0.45;
+    var tol = [3, 2, 1.5, 1, 0.5][lv];
+    var task = null;
+    for (var tries = 0; tries < 60 && !task; tries++) {
+      var d = draft();
+      if (!d) continue;
+      var target = Math.round(d.value * 1000) / 1000;
+      if (wantClose) target = Math.round((target + (Math.random() < 0.5 ? -1 : 1) * tol * 0.4) * 1000) / 1000;
+      if (!isFinite(target) || Math.abs(target) < 3 || Math.abs(target) > 20000) continue;
+      if (S.recent.indexOf(fmt(target)) > -1) continue;
+      if (batch && batch.indexOf(fmt(target)) > -1) continue;
+      task = wantClose
+        ? { id: id, kind: 'close', target: target, tol: tol, base: 50 + lv * 15 }
+        : { id: id, kind: 'exact', target: target, base: 40 + lv * 12 };
+    }
+    if (!task) task = { id: id, kind: 'exact', target: 12, base: 40 + lv * 12 };
+    S.recent.push(fmt(task.target));
+    while (S.recent.length > 16) S.recent.shift();
+    return task;
+  }
+  function describe(t) {
+    if (!t) return 'no task';
+    return t.kind === 'close'
+      ? 'get within ' + t.tol + ' of ' + fmt(t.target)
+      : 'make exactly ' + fmt(t.target);
+  }
+  function fillTasks() {
+    var batch = [];
+    S.tasks.forEach(function (t) { if (t) batch.push(fmt(t.target)); });
+    while (S.tasks.length < 4) {
+      var t = makeTask(batch);
+      batch.push(fmt(t.target));
+      S.tasks.push(t);
+    }
+    S.tasks = S.tasks.slice(0, 4);
+  }
+  function strictOk() {
+    if (X.length < 3) return false;
+    for (var i = 0; i < X.length; i++) if (isOp(X[i])) return true;
+    return false;
+  }
+  function score(v) {
+    var t = S.active;
+    if (!t) return;
+    if (!strictOk()) return toast('needs a sum \u2014 pressing = on a number is no task');
+    if (t.kind === 'exact') {
+      var d = Math.abs(v - t.target);
+      if (d < 1e-9) return award(t, t.base, 'exact');
+      return toast('off by ' + fmt(d));
+    }
+    var gap = Math.abs(v - t.target);
+    if (gap < 1e-9) return award(t, t.base, 'bang on');
+    if (gap > t.tol) return toast('off by ' + fmt(gap) + ' \u2014 needs ' + t.tol);
+    award(t, Math.max(5, Math.round(t.base * 0.55 * (1 - gap / t.tol))), 'off by ' + fmt(gap));
+  }
+  function award(t, pts, why) {
+    S.pts += pts;
+    S.earned += pts;
+    S.solved += 1;
+    if (t.kind === 'exact') S.exact += 1; else S.close += 1;
+    S.active = null;
+    var batch = [];
+    S.tasks.forEach(function (row) { if (row && row.id !== t.id) batch.push(fmt(row.target)); });
+    for (var i = 0; i < S.tasks.length; i++) {
+      if (S.tasks[i] && S.tasks[i].id === t.id) S.tasks[i] = makeTask(batch);
+    }
+    var fresh = gates();
+    save();
+    syncTop();
+    renderTaskline();
+    renderTasks();
+    renderShop();
+    toast('+' + pts + ' \u00b7 ' + why);
+    buzz(30);
+    if (fresh.length) {
+      setTimeout(function () {
+        toast('unlocked ' + fresh.map(nameOf).join(' + '));
+        $('shopOv').hidden = true;
+        sheet(fresh, function () { renderKeys(); renderCells(); renderShop(); });
+      }, 700);
+    }
+  }
+  function takeTask(t) {
+    S.active = t;
+    save();
+    $('tasksOv').hidden = true;
+    renderTaskline();
+    renderTasks();
+  }
+  function renderTasks() {
+    var box = $('taskList');
+    box.innerHTML = '';
+    S.tasks.forEach(function (t) {
+      if (!t) return;
+      var row = h('div', 'task-row' + (S.active && S.active.id === t.id ? ' on' : ''));
+      var info = h('div', 'task-info');
+      info.appendChild(h('b', '', describe(t)));
+      info.appendChild(h('span', '', t.kind === 'exact' ? 'exact hit \u00b7 ' + t.base + ' pts' : 'up to ' + t.base + ' pts'));
+      var btn = h('button', 'take');
+      btn.type = 'button';
+      if (S.active && S.active.id === t.id) {
+        btn.textContent = 'active';
+        btn.disabled = true;
+      } else {
+        btn.textContent = 'take';
+        btn.addEventListener('click', function () { takeTask(t); });
+      }
+      row.appendChild(info);
+      row.appendChild(btn);
+      box.appendChild(row);
+    });
+    var rr = $('reroll');
+    rr.textContent = 'reroll \u00b7 ' + REROLL + ' pts';
+    rr.disabled = S.pts < REROLL;
+  }
+  function reroll() {
+    if (S.pts < REROLL) return toast('need ' + REROLL + ' pts');
+    S.pts -= REROLL;
+    S.active = null;
+    S.tasks = [];
+    var batch = [];
+    for (var i = 0; i < 4; i++) {
+      var t = makeTask(batch);
+      batch.push(fmt(t.target));
+      S.tasks.push(t);
+    }
+    save();
+    syncTop();
+    renderTasks();
+    renderTaskline();
+    buzz(12);
+  }
+
+  function cellsPrice() { return 150 + S.cells * 80; }
+  function repairPrice() { return Math.max(10, Math.round((100 - S.cond) * 1.2)); }
+  function renderShop() {
+    var box = $('shopList');
+    box.innerHTML = '';
+    $('shopPurse').textContent = S.pts + ' pts';
+    SHOP.forEach(function (item) {
+      var row = h('div', 'shop-row');
+      var icon = h('span', 'shop-icon', item.icon);
+      var info = h('div', 'shop-info');
+      var title = h('b', '', item.name);
+      var sub = h('span');
+      info.appendChild(title);
+      info.appendChild(sub);
+      var btn = h('button', 'buy');
+      btn.type = 'button';
+      if (item.id === 'cells') {
+        var maxed = cells() >= CELL_MAX;
+        sub.textContent = 'room for ' + cells() + ' of ' + CELL_MAX + ' tokens';
+        if (maxed) { btn.textContent = 'max'; btn.disabled = true; }
+        else {
+          btn.textContent = cellsPrice() + ' pts';
+          btn.disabled = S.pts < cellsPrice();
+          btn.addEventListener('click', buyCells);
+        }
+      } else if (item.id === 'fix') {
+        sub.textContent = 'now at ' + Math.round(S.cond) + '%';
+        if (S.cond >= 99.5) { btn.textContent = 'fine'; btn.disabled = true; }
+        else {
+          btn.textContent = repairPrice() + ' pts';
+          btn.disabled = S.pts < repairPrice();
+          btn.addEventListener('click', repair);
+        }
+      } else if (item.id === 'double') {
+        var free = room();
+        sub.textContent = free.length ? item.desc : 'every token already doubles';
+        if (!free.length) { btn.textContent = 'all done'; btn.disabled = true; }
+        else {
+          btn.textContent = DOUBLE + ' pts';
+          btn.disabled = S.pts < DOUBLE;
+          if (!btn.disabled) btn.addEventListener('click', openPick);
+        }
+      } else if (item.gate) {
+        var list = item.tokens || [item.id];
+        if (list.every(has)) { sub.textContent = item.desc; btn.textContent = 'owned'; btn.disabled = true; }
+        else { sub.textContent = gateText(item); btn.textContent = 'task reward'; btn.disabled = true; }
+      } else {
+        var pair = item.tokens || [item.id];
+        sub.textContent = item.desc;
+        if (pair.every(has)) { btn.textContent = 'owned'; btn.disabled = true; }
+        else {
+          btn.textContent = item.price + ' pts';
+          btn.disabled = S.pts < item.price;
+          if (!btn.disabled) btn.addEventListener('click', function () { buyToken(item); });
+        }
+      }
+      row.appendChild(icon);
+      row.appendChild(info);
+      row.appendChild(btn);
+      box.appendChild(row);
+    });
+  }
+  function buyCells() {
+    var price = cellsPrice();
+    if (S.pts < price) return;
+    S.pts -= price;
+    S.cells += 1;
+    save();
+    syncTop();
+    renderShop();
+    renderCells();
+    toast('one more cell');
+  }
+  function repair() {
+    var price = repairPrice();
+    if (S.pts < price) return;
+    S.pts -= price;
+    S.cond = 100;
+    updateCond();
+    save();
+    syncTop();
+    renderShop();
+    toast('tuned up');
+  }
+  function buyToken(item) {
+    if (S.pts < item.price) return;
+    S.pts -= item.price;
+    var list = item.tokens || [item.id];
+    list.forEach(function (id) { if (!has(id)) S.unlocked.push(id); });
+    save();
+    syncTop();
+    renderShop();
+    renderKeys();
+    renderInk();
+    $('shopOv').hidden = true;
+    sheet(list, function () { renderKeys(); renderCells(); });
+  }
+
+  function renderPick() {
+    var box = $('pickList');
+    box.innerHTML = '';
+    owned().forEach(function (id) {
+      if (S.doubled[id]) return;
+      var b = h('button', 'ink-cell');
+      b.type = 'button';
+      b.title = 'double ' + nameOf(id);
+      b.appendChild(face(id, 'sm'));
+      b.addEventListener('click', function () { buyDouble(id); });
+      box.appendChild(b);
+    });
+  }
+  function openPick() {
+    renderPick();
+    $('pickOv').hidden = false;
+  }
+  function buyDouble(id) {
+    if (S.pts < DOUBLE) return toast('need ' + DOUBLE + ' pts');
+    S.pts -= DOUBLE;
+    S.doubled[id] = true;
+    save();
+    syncTop();
+    $('pickOv').hidden = true;
+    renderKeys();
+    renderShop();
+    redraw();
+    toast(nameOf(id) + ' can be used twice');
+    buzz(20);
+  }
+
+  function gateProgress(item) {
+    if (item.gate === 'solved') return [S.solved, item.n];
+    if (item.gate === 'exact') return [S.exact, item.n];
+    if (item.gate === 'close') return [S.close, item.n];
+    return [S.earned, item.n];
+  }
+  function gateText(item) {
+    var p = gateProgress(item);
+    var now = Math.min(p[0], p[1]) + '/' + p[1];
+    if (item.gate === 'solved') return 'unlocks after ' + item.n + ' tasks (' + now + ')';
+    if (item.gate === 'exact') return 'unlocks after ' + item.n + ' exact hits (' + now + ')';
+    if (item.gate === 'close') return 'unlocks after ' + item.n + ' near hits (' + now + ')';
+    return 'unlocks after ' + item.n + ' pts earned (' + now + ')';
+  }
+  function gates() {
+    var fresh = [];
+    SHOP.forEach(function (item) {
+      if (!item.gate) return;
+      var list = item.tokens || [item.id];
+      if (list.every(has)) return;
+      if (gateProgress(item)[0] < item.n) return;
+      list.forEach(function (id) {
+        if (!has(id)) { S.unlocked.push(id); fresh.push(id); }
+      });
+    });
+    if (fresh.length) {
+      save();
+      renderKeys();
+      renderInk();
+    }
+    return fresh;
+  }
+
+  function renderInk() {
+    var box = $('inkGrid');
+    box.innerHTML = '';
+    owned().forEach(function (id) {
+      var b = h('button', 'ink-cell');
+      b.type = 'button';
+      b.title = 'draw ' + nameOf(id);
+      b.appendChild(face(id, 'sm'));
+      b.addEventListener('click', function () {
+        $('inkOv').hidden = true;
+        sheet([id], function () { renderKeys(); renderCells(); });
+      });
+      box.appendChild(b);
+    });
+  }
+
+  var queue = [], qi = 0, after = null;
+  var strokes = [], drawing = false, board = 320, ctx = null;
+  function sheet(ids, done) {
+    queue = ids.slice();
+    qi = 0;
+    after = done || null;
+    $('drawOv').hidden = false;
+    sizeBoard();
+    step();
+  }
+  function sizeBoard() {
+    var r = $('inkPad').getBoundingClientRect();
+    board = Math.max(160, Math.round(r.width || 300));
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    $('inkPad').width = Math.round(board * dpr);
+    $('inkPad').height = Math.round(board * dpr);
+    ctx = $('inkPad').getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = ctx.lineJoin = 'round';
+    paintBoard();
+  }
+  function step() {
+    if (qi >= queue.length) return finish();
+    var id = queue[qi];
+    $('drawTitle').textContent = 'draw ' + nameOf(id);
+    $('drawCount').textContent = (qi + 1) + '/' + queue.length;
+    $('drawGhost').textContent = T[id].g;
+    $('drawGhost').style.fontSize = T[id].g.length > 1 ? 'clamp(48px,16vw,96px)' : 'clamp(96px,34vw,190px)';
+    strokes = (S.ink[id] || []).map(function (s) { return s.slice(); });
+    paintBoard();
+  }
+  function paintBoard() {
+    if (!ctx) return;
+    ctx.clearRect(0, 0, board, board);
+    ctx.strokeStyle = ctx.fillStyle = '#1d1a16';
+    ctx.lineWidth = 5;
+    strokes.forEach(function (s) {
+      if (s.length < 4) {
+        if (!s.length) return;
+        ctx.beginPath();
+        ctx.arc(s[0] * board, s[1] * board, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      }
+      ctx.beginPath();
+      for (var i = 0; i < s.length; i += 2) {
+        var x = s[i] * board, y = s[i + 1] * board;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
+  }
+  function poke(e) {
+    var r = $('inkPad').getBoundingClientRect();
+    var x = (e.clientX - r.left) / r.width;
+    var y = (e.clientY - r.top) / r.height;
+    x = x < 0 ? 0 : x > 1 ? 1 : x;
+    y = y < 0 ? 0 : y > 1 ? 1 : y;
+    var s = strokes[strokes.length - 1];
+    if (!s) return;
+    var from = s.length - 2;
+    s.push(Math.round(x * 10000) / 10000, Math.round(y * 10000) / 10000);
+    if (from < 0) return;
+    ctx.beginPath();
+    ctx.moveTo(s[from] * board, s[from + 1] * board);
+    ctx.lineTo(x * board, y * board);
+    ctx.stroke();
+  }
+  function saveInk() {
+    var id = queue[qi];
+    var kept = strokes.filter(function (s) { return s.length >= 2; });
+    if (kept.length) S.ink[id] = kept; else delete S.ink[id];
+    forget(id);
+    save();
+  }
+  function finish() {
+    S.seen = true;
+    save();
+    $('drawOv').hidden = true;
+    drawing = false;
+    strokes = [];
+    renderKeys();
+    renderCells();
+    renderInk();
+    var follow = after;
+    after = null;
+    if (follow) follow();
+  }
+
+  $('openTasks').addEventListener('click', function () { renderTasks(); $('tasksOv').hidden = false; });
+  $('openShop').addEventListener('click', function () { renderShop(); $('shopOv').hidden = false; });
+  $('openInk').addEventListener('click', function () { renderInk(); $('inkOv').hidden = false; });
+  $('reroll').addEventListener('click', reroll);
+  document.querySelectorAll('[data-close]').forEach(function (btn) {
+    btn.addEventListener('click', function () { btn.closest('.overlay').hidden = true; });
+  });
+  document.querySelectorAll('.overlay').forEach(function (ov) {
+    ov.addEventListener('pointerdown', function (e) {
+      if (e.target === ov && ov.id !== 'drawOv') ov.hidden = true;
+    });
+  });
+  $('inkAll').addEventListener('click', function () {
+    $('inkOv').hidden = true;
+    sheet(owned(), function () { renderKeys(); renderCells(); });
+  });
+  var armed = false, armTimer = null;
+  $('wipe').addEventListener('click', function (e) {
+    var btn = e.currentTarget;
+    if (!armed) {
+      armed = true;
+      btn.textContent = 'tap again';
+      armTimer = setTimeout(function () { armed = false; btn.textContent = 'wipe progress'; }, 3000);
+      return;
+    }
+    clearTimeout(armTimer);
+    try { localStorage.removeItem(KEY); } catch (err) {}
+    location.reload();
+  });
+  $('inkPad').addEventListener('pointerdown', function (e) {
+    if (qi >= queue.length) return;
+    e.preventDefault();
+    try { $('inkPad').setPointerCapture(e.pointerId); } catch (err) {}
+    drawing = true;
+    strokes.push([]);
+    poke(e);
+  });
+  $('inkPad').addEventListener('pointermove', function (e) {
+    if (!drawing) return;
+    e.preventDefault();
+    poke(e);
+  });
+  ['pointerup', 'pointercancel'].forEach(function (type) {
+    $('inkPad').addEventListener(type, function () {
+      if (!drawing) return;
+      drawing = false;
+      var last = strokes[strokes.length - 1];
+      if (last && last.length < 2) strokes.pop();
+      paintBoard();
+    });
+  });
+  $('tSave').addEventListener('click', function () {
+    if (qi >= queue.length) return finish();
+    saveInk();
+    qi += 1;
+    step();
+  });
+  $('tPrinted').addEventListener('click', function () {
+    if (qi >= queue.length) return finish();
+    delete S.ink[queue[qi]];
+    forget(queue[qi]);
+    save();
+    qi += 1;
+    step();
+  });
+  $('tBack').addEventListener('click', function () {
+    if (qi === 0) return;
+    qi -= 1;
+    step();
+  });
+  $('tRetry').addEventListener('click', function () { strokes = []; paintBoard(); });
+  $('tSkip').addEventListener('click', function () { qi += 1; step(); });
+  $('tSkipAll').addEventListener('click', finish);
+  window.addEventListener('resize', function () {
+    if (!$('drawOv').hidden) sizeBoard();
+  });
+
+  gates();
+  renderKeys();
+  fillTasks();
+  syncTop();
+  renderCells();
+  renderTaskline();
+  renderTasks();
+  renderShop();
+  renderInk();
+  if (!S.seen) sheet(BASE, function () { renderCells(); });
+})();
+</script>
+</body>
+</html>
