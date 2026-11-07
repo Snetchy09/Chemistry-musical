@@ -24,7 +24,6 @@ body {
   background-size: 4px 4px, cover;
   background-position: 0 0, center;
   background-repeat: repeat, no-repeat;
-  background-attachment: scroll, fixed;
   color: var(--ink);
   font-family: "Patrick Hand", ui-rounded, system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
@@ -236,12 +235,21 @@ body[data-wear="dead"] .cond i { background: var(--bad); }
 .key.del { color: var(--faint); font-size: 18px; }
 
 .key.eq {
-  grid-column: span 4;
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
-  font-size: 17px;
-  letter-spacing: .12em;
+  display: block;
+  grid-column: 1 / -1;
+  height: 58px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fffdf6;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  box-shadow: 0 4px 0 #5f381d, 0 6px 12px #00000024;
+}
+
+.key.eq:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #5f381d;
 }
 
 .key .twin {
@@ -270,38 +278,13 @@ body[data-wear="dead"] .cond i { background: var(--bad); }
 .crash-screen {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 1000;
   display: grid;
   place-items: center;
   padding: 24px;
   background: #1d1a16;
   color: #f4efe3;
   text-align: center;
-}
-
-.crash-screen[hidden] {
-  display: none;
-}
-
-.crash-note {
-  width: min(100%, 360px);
-}
-
-.crash-note h1 {
-  margin: 0 0 8px;
-  font-family: Caveat, cursive;
-  font-size: clamp(36px, 10vw, 58px);
-  font-weight: 700;
-}
-
-.crash-note p {
-  margin: 0 0 18px;
-  color: #f4efe3bb;
-  font-size: 16px;
-}
-
-.crash-note .wide {
-  background: #fffdf7;
 }
 
 .overlay {
@@ -614,11 +597,11 @@ body[data-wear="dead"] .cond i { background: var(--bad); }
 .crash-screen {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 1000;
   display: grid;
-  place-items: center;
-  padding: 24px;
-  background: #090806e8;
+  place-items: start center;
+  padding: 8vh 24px 24px;
+  background: #1d1a16;
   color: #f4efe3;
   text-align: center;
   pointer-events: none;
@@ -629,32 +612,38 @@ body[data-wear="dead"] .cond i { background: var(--bad); }
 }
 
 .crash-note {
-  position: fixed;
-  top: 12vh;
-  left: 50%;
-  width: min(88vw, 360px);
-  transform: translateX(-50%);
-  font-size: 15px;
+  width: min(100%, 360px);
+}
+
+.crash-note h1 {
+  margin: 0 0 16px;
+  font-family: Caveat, cursive;
+  font-size: clamp(42px, 12vw, 64px);
+  line-height: 1.1;
 }
 
 .crash-note p {
-  margin: 0 0 8px;
+  margin: 0 0 12px;
+  font-size: 18px;
+  line-height: 1.5;
 }
 
 .crash-note small {
   color: #f4efe399;
-  font-size: 11px;
+  font-size: 14px;
 }
 
+/* Put the calculator above the crash background so = can be clicked. */
 body.crashed .app {
   position: relative;
-  z-index: 101;
+  z-index: 1001;
 }
 
 body.crashed .hud,
 body.crashed .dead-note,
+body.crashed .screen,
 body.crashed .key:not(.eq) {
-  visibility: hidden;
+  display: none;
 }
 
 body.crashed .machine {
@@ -663,27 +652,12 @@ body.crashed .machine {
   box-shadow: none;
 }
 
-body.crashed .screen {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: 12px;
-}
-
 body.crashed .key.eq {
+  display: block;
   visibility: visible;
+  grid-column: 1 / -1;
+  height: 58px;
   background: var(--bad);
   border-color: var(--bad);
   color: #fff;
-}
-
-.calc-shake {
-  animation: calc-shake .22s ease-in-out;
-}
-
-@keyframes calc-shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(calc(var(--calc-shake) * -1)); }
-  40% { transform: translateX(var(--calc-shake)); }
-  60% { transform: translateX(calc(var(--calc-shake) * -0.7)); }
-  80% { transform: translateX(calc(var(--calc-shake) * 0.7)); }
 }
