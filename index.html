@@ -30,15 +30,15 @@
 </div>
 <div class="crash-screen" id=crashScreen hidden>
   <div class=crash-note>
-    <h1>calculator crashed</h1>
-    <p>the paper ran out of life. refresh the page to start it again.</p>
-    <button class=wide id=refreshCrash type=button>refresh page</button>
+    <h1>calculator boom</h1>
+    <p>dude calm down, you didn't try to repair the calc right? now you lose everything...</p>
+    <small>click = to continue</small>
   </div>
 </div>
 <div class=overlay id=tasksOv hidden>
   <div class=panel>
     <header class=panel-head>
-      <h2>tasks</h2>
+      <h2>tasks hell yeah</h2>
       <button class=x type=button data-close aria-label=close>&times;</button>
     </header>
     <div class=panel-body id=taskList></div>
@@ -50,7 +50,7 @@
 <div class=overlay id=shopOv hidden>
   <div class=panel>
     <header class=panel-head>
-      <h2>shop</h2>
+      <h2>shooooooooooooop</h2>
       <span class=purse id=shopPurse>0 pts</span>
       <button class=x type=button data-close aria-label=close>&times;</button>
     </header>
@@ -168,12 +168,12 @@
     return s;
   }
   var S = load();
-  var crashedBeforeRefresh = S.cond <= 0;
-  if (crashedBeforeRefresh) S.cond = 100;
+  var crashed = S.cond <= 0;
+  var calcCount = 0;
+
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
   }
-  if (crashedBeforeRefresh) save();
   function $(id) { return document.getElementById(id); }
   function h(tag, cls, text) {
     var n = document.createElement(tag);
@@ -246,15 +246,25 @@
     var c = Math.max(0, Math.min(100, S.cond));
     $('condFill').style.width = c + '%';
     $('condNum').textContent = Math.round(c) + '%';
+    var wear = (100 - c) / 100;
+    $('condNum').style.fontSize = (11 + wear * 13) + 'px';
+    $('condNum').style.color = 'rgb(' +
+      Math.round(76 + wear * 63) + ',' +
+      Math.round(107 - wear * 49) + ',' +
+      Math.round(63 - wear * 17) + ')';
     document.body.dataset.wear = c <= 0 ? 'dead' : c < 25 ? 'dying' : c < 55 ? 'bad' : c < 85 ? 'worn' : 'fine';
     $('machine').classList.toggle('is-dead', c <= 0);
     $('deadNote').hidden = c > 0;
-    $('crashScreen').hidden = c > 0;
+    $('crashScreen').hidden = !crashed;
+    document.body.classList.toggle('crashed', crashed);
+
   }
   function use(n, floor) {
     S.cond = Math.max(floor || 0, Math.min(100, S.cond - n));
+    if (S.cond <= 0) crashed = true;
     updateCond();
     save();
+    return crashed;
   }
 
   var toastTimer = null;
@@ -337,7 +347,7 @@
     if (spent(id)) { toast('one use per token \u2014 clear it first'); buzz(20); return; }
     if (X.length >= cells()) { shake($('machine')); toast('no room \u2014 buy cells'); return; }
     X.push(id);
-    use(0.06, 8);
+    if (use(0.06, 0)) return;
     if (S.cond < 30 && Math.random() < (30 - S.cond) / 30 * 0.25) {
       X.pop();
       redraw();
@@ -398,20 +408,31 @@
     } catch (e) { return NaN; }
   }
   function equals() {
-    if (dead()) return thud();
+    if (crashed) {
+      try { localStorage.removeItem(KEY); } catch (e) {}
+      location.reload();
+      return;
+    }
     if (!X.length) return shake($('machine'));
+
+    calcCount += 1;
+    var machine = $('machine');
+    machine.style.setProperty('--calc-shake', (1 + Math.min(calcCount, 8) * 0.5) + 'px');
+    machine.classList.remove('calc-shake');
+    void machine.offsetWidth;
+    machine.classList.add('calc-shake');
     var src = toSource(), v;
     if (/[^0-9+\-*/().a-zA-Z]/.test(src)) return shake($('machine'));
     try { v = new Function('"use strict";return (' + src + ')')(); }
     catch (e) { toast('that does not read'); return shake($('machine')); }
     if (typeof v !== 'number' || !isFinite(v)) {
-      use(18, 0);
+      if (use(18, 0)) return;
       $('readout').textContent = 'err';
       shake($('machine'));
       toast('short circuit \u221218%');
       return;
     }
-    use(1.5, 8);
+    if (use(1.5, 0)) return;
     $('readout').textContent = fmt(v);
     buzz(15);
     score(v);
@@ -870,7 +891,6 @@
   $('openShop').addEventListener('click', function () { renderShop(); $('shopOv').hidden = false; });
   $('openInk').addEventListener('click', function () { renderInk(); $('inkOv').hidden = false; });
   $('reroll').addEventListener('click', reroll);
-  $('refreshCrash').addEventListener('click', function () { location.reload(); });
   document.querySelectorAll('[data-close]').forEach(function (btn) {
     btn.addEventListener('click', function () { btn.closest('.overlay').hidden = true; });
   });
