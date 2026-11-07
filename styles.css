@@ -24,6 +24,7 @@ body {
   background-size: 4px 4px, cover;
   background-position: 0 0, center;
   background-repeat: repeat, no-repeat;
+  background-attachment: scroll, fixed;
   color: var(--ink);
   font-family: "Patrick Hand", ui-rounded, system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
@@ -608,4 +609,81 @@ body[data-wear="dead"] .cond i { background: var(--bad); }
   .face.keyface {
     font-size: 22px;
   }
+}
+
+.crash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #090806e8;
+  color: #f4efe3;
+  text-align: center;
+  pointer-events: none;
+}
+
+.crash-screen[hidden] {
+  display: none;
+}
+
+.crash-note {
+  position: fixed;
+  top: 12vh;
+  left: 50%;
+  width: min(88vw, 360px);
+  transform: translateX(-50%);
+  font-size: 15px;
+}
+
+.crash-note p {
+  margin: 0 0 8px;
+}
+
+.crash-note small {
+  color: #f4efe399;
+  font-size: 11px;
+}
+
+body.crashed .app {
+  position: relative;
+  z-index: 101;
+}
+
+body.crashed .hud,
+body.crashed .dead-note,
+body.crashed .key:not(.eq) {
+  visibility: hidden;
+}
+
+body.crashed .machine {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+body.crashed .screen {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+}
+
+body.crashed .key.eq {
+  visibility: visible;
+  background: var(--bad);
+  border-color: var(--bad);
+  color: #fff;
+}
+
+.calc-shake {
+  animation: calc-shake .22s ease-in-out;
+}
+
+@keyframes calc-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(calc(var(--calc-shake) * -1)); }
+  40% { transform: translateX(var(--calc-shake)); }
+  60% { transform: translateX(calc(var(--calc-shake) * -0.7)); }
+  80% { transform: translateX(calc(var(--calc-shake) * 0.7)); }
 }
